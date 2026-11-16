@@ -428,14 +428,14 @@ export class MediaService extends BaseService {
       orientation: Buffer.isBuffer(inputImage) && exifOrientation ? Number(exifOrientation) : undefined,
     });
 
-    const thumbnailPath = StorageCore.getPersonThumbnailPath({ ownerId, personGroupId });
+    const thumbnailPath = StorageCore.getPersonThumbnailPath({ ownerId, personGroupId }, image.thumbnail.format);
     this.storageCore.ensureFolders(thumbnailPath);
 
     const thumbnailOptions: GenerateThumbnailOptions = {
       colorspace: image.colorspace,
-      format: ImageFormat.Jpeg,
+      format: image.thumbnail.format,
       quality: image.thumbnail.quality,
-      progressive: false,
+      progressive: image.thumbnail.progressive,
       processInvalidImages: false,
       size: FACE_THUMBNAIL_SIZE,
       edits: [
@@ -455,6 +455,9 @@ export class MediaService extends BaseService {
 
     await this.mediaRepository.generateThumbnail(decoded, thumbnailOptions, thumbnailPath);
     await this.personRepository.update({ ownerId, personGroupId, thumbnailPath });
+    if (data.thumbnailPath && data.thumbnailPath !== thumbnailPath) {
+      await this.jobRepository.queue({ name: JobName.FileDelete, data: { files: [data.thumbnailPath] } });
+    }
 
     return JobStatus.Success;
   }
